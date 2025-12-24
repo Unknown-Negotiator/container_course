@@ -1,0 +1,78 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:14
+    container_name: lab2-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - labnet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  init-db:
+    image: postgres:14
+    container_name: lab2-init
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command: |
+      set -e
+      until pg_isready -h ${DB_HOST} -p ${DB_PORT} -U ${DB_USER}; do
+        echo "Waiting for postgres..."
+        sleep 2
+      done
+      PGPASSWORD=${DB_PASSWORD} psql -h ${DB_HOST} -p ${DB_PORT} -U ${DB_USER} -d ${DB_NAME} \
+        -c "CREATE TABLE IF NOT EXISTS healthcheck (created_at TIMESTAMPTZ DEFAULT NOW(), note TEXT);" && \
+      echo "Init complete"
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+    networks:
+      - labnet
+    restart: "no"
+
+  api:
+    build:
+      context: ../lab1
+      dockerfile: Dockerfile.good
+    image: immunogen-api:lab2
+    container_name: lab2-api
+    depends_on:
+      db:
+        condition: service_healthy
+      init-db:
+        condition: service_completed_successfully
+    environment:
+      HF_HUB_CACHE: /cache/hf
+      ANTIBERTY_CACHE_DIR: /cache/antiberty
+    volumes:
+      - cache_data:/cache
+    ports:
+      - "${API_PORT}:8000"
+    networks:
+      - labnet
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  db_data:
+  cache_data:
+
+networks:
+  labnet:
