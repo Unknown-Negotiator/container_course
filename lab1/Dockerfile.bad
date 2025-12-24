@@ -1,0 +1,12 @@
+# Intentionally bad Dockerfile for lab review.
+FROM python:3.10
+
+RUN apt-get update && apt-get install -y vim nano curl git build-essential
+
+WORKDIR /srv
+
+COPY . .
+
+RUN pip install -r lab1/app/requirements.txt torch torchvision torchaudio
+
+CMD ["python", "lab1/app/immunogen_service/cli.py", "--help"]
