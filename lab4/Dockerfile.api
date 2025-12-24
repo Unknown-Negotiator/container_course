@@ -1,0 +1,27 @@
+# Custom image for lab4 API (built from lab1 sources).
+FROM python:3.10-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    HF_HUB_CACHE=/cache/hf \
+    ANTIBERTY_CACHE_DIR=/cache/antiberty
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential git ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY app/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app/ /app/
+COPY models/ /app/models/
+
+RUN useradd -m appuser && chown -R appuser:appuser /app
+USER appuser
+
+EXPOSE 8000
+
+ENTRYPOINT ["uvicorn", "immunogen_service.api:app", "--host", "0.0.0.0", "--port", "8000"]
